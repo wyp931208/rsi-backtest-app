@@ -623,149 +623,107 @@ RSI计算所使用的周期，常用14。
 # =========================
 # PDF 辅助函数
 # =========================
-def add_trade_table_to_pdf(pdf, title, trade_df):
+def add_trade_table_to_pdf(pdf, title, trade_df, font_name):
     pdf.add_page()
-    pdf.set_font("MSYH", "B", 12)
+    pdf.set_font(font_name, "B", 12)
     pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(2)
 
-    headers = ["日期", "代码", "操作", "价格", "RSI", "股数"]
-    col_widths = [35, 30, 20, 25, 25, 45]
+    pdf.set_font(font_name, "", 8)
 
-    pdf.set_font("MSYH", "B", 8)
-    for w, h in zip(col_widths, headers):
-        pdf.cell(w, 8, h, border=1, align="C")
-    pdf.ln()
-
-    pdf.set_font("MSYH", "", 8)
     if trade_df is not None and not trade_df.empty:
         for _, row in trade_df.tail(20).iterrows():
-            vals = [
-                str(row.get("date", ""))[:10],
-                str(row.get("code", "")),
-                str(row.get("action", "")),
-                f"{row.get('price', 0):.2f}",
-                f"{row.get('rsi', np.nan):.2f}" if pd.notna(row.get('rsi', np.nan)) else "N/A",
-                f"{row.get('shares', 0):.2f}"
-            ]
-            for w, val in zip(col_widths, vals):
-                pdf.cell(w, 8, str(val), border=1, align="C")
-            pdf.ln()
+            line = f"{str(row.get('date', ''))[:10]} | {row.get('code','')} | {row.get('action','')}"
+            pdf.multi_cell(190, 6, line)
     else:
-        pdf.cell(0, 8, "暂无交易记录", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, "暂无交易记录")
+
+from fpdf import FPDF
+import textwrap
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 
 def generate_pdf_report(results, trade_df, single_results, settings_summary):
     pdf = FPDF()
-    import os
-    font_path = os.path.join(os.path.dirname(__file__), "fonts", "MSYH.TTC")
-    #font_path = r"C:/Windows/Fonts/msyh.ttc"
 
-    pdf.add_font("MSYH", "", font_path)
-    pdf.add_font("MSYH", "B", font_path)
+    # ✅ 字体加载（核心）
+    font_path = get_font_path()
 
+    if font_path:
+        pdf.add_font("CN", "", font_path, uni=True)
+        pdf.add_font("CN", "B", font_path, uni=True)
+        font_name = "CN"
+    else:
+        font_name = "Arial"  # fallback（不崩）
+
+    # =========================
     # 第1页：首页 + 策略设置
+    # =========================
     pdf.add_page()
-    pdf.set_font("MSYH", "B", 16)
+    pdf.set_font(font_name, "B", 16)
     pdf.cell(0, 10, "RSI策略回测报告", new_x="LMARGIN", new_y="NEXT", align="C")
+
     pdf.ln(5)
-    
-    pdf.set_font("MSYH", "B", 12)
+    pdf.set_font(font_name, "B", 12)
     pdf.cell(0, 8, "一、策略设置", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_font("MSYH", "", 10)
+
+    pdf.set_font(font_name, "", 10)
     for line in settings_summary:
         wrapped_lines = textwrap.wrap(str(line), width=40)
         for wline in wrapped_lines:
             pdf.multi_cell(190, 6, wline, new_x="LMARGIN", new_y="NEXT")
-    
-    # 第2页：组合/策略绩效概览
+
+    # =========================
+    # 第2页：绩效
+    # =========================
     pdf.add_page()
-    pdf.set_font("MSYH", "B", 12)
-    pdf.cell(0, 8, "二、组合/策略绩效概览", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_font("MSYH", "", 10)
+    pdf.set_font(font_name, "B", 12)
+    pdf.cell(0, 8, "二、策略绩效概览", new_x="LMARGIN", new_y="NEXT")
+
     for res in results:
-        pdf.set_font("MSYH", "B", 11)
+        pdf.set_font(font_name, "B", 11)
         pdf.cell(0, 7, res.get("name", "策略"), new_x="LMARGIN", new_y="NEXT")
-    
-        pdf.set_font("MSYH", "", 10)
+
+        pdf.set_font(font_name, "", 10)
         for k, v in res["metrics"].items():
             if isinstance(v, (float, int)) and not pd.isna(v):
                 text = f"{k}: {v:.4f}"
             else:
                 text = f"{k}: {v}"
-    
-            pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(190, 6, text, new_x="LMARGIN", new_y="NEXT")
-    
+
+            pdf.multi_cell(190, 6, text)
+
         pdf.ln(2)
+
     # =========================
-    # 第3页：单标的收益柱状图
+    # 第3页：柱状图
     # =========================
     pdf.add_page()
-    pdf.set_font("MSYH", "B", 12)
-    pdf.cell(0, 8, "四、单标的收益柱状图", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(3)
+    pdf.set_font(font_name, "B", 12)
+    pdf.cell(0, 8, "三、单标的收益对比", new_x="LMARGIN", new_y="NEXT")
 
-    fig_bar, ax_bar = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 5))
+
     codes = [res["code"] for res in single_results]
-    returns = [res["metrics"]["策略收益"] if pd.notna(res["metrics"]["策略收益"]) else 0 for res in single_results]
-    ax_bar.bar(codes, returns)
-    ax_bar.set_title("单标的策略总收益对比")
-    ax_bar.set_ylabel("收益率")
-    plt.xticks(rotation=30)
+    returns = [
+        res["metrics"]["策略收益"] if pd.notna(res["metrics"]["策略收益"]) else 0
+        for res in single_results
+    ]
 
-    bar_path = "single_bar_chart.png"
-    fig_bar.savefig(bar_path, format="png", dpi=200, bbox_inches='tight')
-    plt.close(fig_bar)
-    pdf.image(bar_path, x=10, w=180)
+    ax.bar(codes, returns)
+    ax.set_title("单标的策略总收益对比", fontproperties=font_prop)
+    ax.set_ylabel("收益率", fontproperties=font_prop)
 
-    # =========================
-    # 第4页：单标的净值图（基准 + 各单标的）
-    # =========================
-    pdf.add_page()
-    pdf.set_font("MSYH", "B", 12)
-    pdf.cell(0, 8, "五、单标的净值曲线对比", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(3)
+    img_path = "bar.png"
+    fig.savefig(img_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
-    fig_single, ax_single = plt.subplots(figsize=(10, 5))
-    for res in single_results:
-        ax_single.plot(
-            res["result_df"]['date'],
-            res["result_df"]['strategy_nav'],
-            label=res["code"]
-        )
-
-    if single_results:
-        ax_single.plot(
-            single_results[0]["result_df"]['date'],
-            single_results[0]["result_df"]['benchmark_nav'],
-            label="基准",
-            linestyle='--'
-        )
-
-    ax_single.set_title("单标的净值曲线对比")
-    ax_single.legend()
-
-    single_nav_path = "single_nav_chart.png"
-    fig_single.savefig(single_nav_path, format="png", dpi=200, bbox_inches='tight')
-    plt.close(fig_single)
-    pdf.image(single_nav_path, x=10, w=180)
+    pdf.image(img_path, x=10, w=180)
 
     # =========================
-    # 第5页：组合交易明细
+    # 第4页：交易记录
     # =========================
-    add_trade_table_to_pdf(pdf, "六、组合交易明细（最近20条）", trade_df)
-
-    # =========================
-    # 后续页：各单标的交易明细
-    # =========================
-    for idx, res in enumerate(single_results, start=1):
-        add_trade_table_to_pdf(
-            pdf,
-            f"七、单标的交易明细 - {res['code']}（最近20条）",
-            res.get("trade_df", pd.DataFrame())
-        )
+    add_trade_table_to_pdf(pdf, "四、组合交易明细", trade_df, font_name)
 
     return bytes(pdf.output())
 
