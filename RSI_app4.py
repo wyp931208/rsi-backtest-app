@@ -10,6 +10,17 @@ import matplotlib.pyplot as plt
 import tushare as ts
 import textwrap
 from io import BytesIO
+import matplotlib.font_manager as fm
+
+def get_font_path():
+    base_dir = os.path.dirname(__file__)
+
+    path = os.path.join(base_dir, "fonts", "noto-sans-sc-regular.otf")
+
+    if os.path.exists(path):
+        return path
+
+    return None
 # =========================
 # matplotlib 中文显示设置
 # 解决 PDF 图中中文标题/图例显示为方框的问题
@@ -648,13 +659,11 @@ def generate_pdf_report(results, trade_df, single_results, settings_summary):
 
     # ✅ 字体加载（核心）
     font_path = get_font_path()
-
+    
     if font_path:
-        pdf.add_font("CN", "", font_path, uni=True)
-        pdf.add_font("CN", "B", font_path, uni=True)
-        font_name = "CN"
+        font_prop = fm.FontProperties(fname=font_path)
     else:
-        font_name = "Arial"  # fallback（不崩）
+        font_prop = None
 
     # =========================
     # 第1页：首页 + 策略设置
@@ -711,8 +720,9 @@ def generate_pdf_report(results, trade_df, single_results, settings_summary):
     ]
 
     ax.bar(codes, returns)
-    ax.set_title("单标的策略总收益对比", fontproperties=font_prop)
-    ax.set_ylabel("收益率", fontproperties=font_prop)
+    ax_bar.set_title("单标的策略总收益对比", fontproperties=font_prop)
+    ax_bar.set_ylabel("收益率", fontproperties=font_prop)
+
 
     img_path = "bar.png"
     fig.savefig(img_path, dpi=200, bbox_inches="tight")
