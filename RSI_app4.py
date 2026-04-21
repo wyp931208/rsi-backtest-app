@@ -656,7 +656,7 @@ def add_trade_table_to_pdf(pdf, title, trade_df):
 
 def generate_pdf_report(results, trade_df, single_results, settings_summary):
     pdf = FPDF()
-    font_path = "msyh.ttc"
+    font_path = "MSYH.ttc"
     #font_path = r"C:/Windows/Fonts/msyh.ttc"
 
     pdf.add_font("MSYH", "", font_path)
