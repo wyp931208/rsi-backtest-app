@@ -1,6 +1,5 @@
 import os
 import textwrap
-from io import BytesIO
 from datetime import datetime
 
 import numpy as np
@@ -21,21 +20,21 @@ import matplotlib.font_manager as fm
 def get_font_paths():
     """
     返回可用的中文字体路径（regular, bold）
-    优先使用仓库 fonts 目录中的字体文件
+    优先使用你仓库中的 ttf 字体
     """
     base_dir = os.path.dirname(os.path.abspath(__file__))
     fonts_dir = os.path.join(base_dir, "fonts")
 
     regular_candidates = [
-        os.path.join(fonts_dir, "noto-sans-sc-regular.otf"),
-        os.path.join(fonts_dir, "NotoSansCJK-Regular.ttc"),
+        os.path.join(fonts_dir, "NotoSansSC-6.ttf"),
         os.path.join(fonts_dir, "MSYH.TTC"),
+        os.path.join(fonts_dir, "noto-sans-sc-regular.otf"),
     ]
 
     bold_candidates = [
-        os.path.join(fonts_dir, "NotoSansSC-Bold.otf"),
+        os.path.join(fonts_dir, "Noto-Sans-SC-Bold-2.ttf"),
         os.path.join(fonts_dir, "MSYH.TTC"),
-        os.path.join(fonts_dir, "NotoSansCJK-Regular.ttc"),
+        os.path.join(fonts_dir, "NotoSansSC-Bold.otf"),
     ]
 
     regular_path = next((p for p in regular_candidates if os.path.exists(p)), None)
@@ -690,15 +689,14 @@ def ensure_pdf_fonts(pdf):
 
     if not regular_path:
         raise FileNotFoundError(
-            "未找到可用中文字体，请确认 fonts 目录中存在 noto-sans-sc-regular.otf 或其它中文字体。"
+            "未找到可用中文字体，请确认 fonts 目录中存在 NotoSansSC-6.ttf 或 MSYH.TTC。"
         )
 
     font_name = "CNFont"
 
-    # 注册常规字体
+    # FPDF 对 ttf 支持更稳
     pdf.add_font(font_name, "", regular_path)
 
-    # 注册粗体字体：如果没有单独粗体，就退回常规字体
     if bold_path:
         pdf.add_font(font_name, "B", bold_path)
     else:
@@ -736,10 +734,10 @@ def safe_pdf_bytes(pdf):
     兼容不同 FPDF/fpdf2 版本的输出
     """
     out = pdf.output(dest="S")
-    if isinstance(out, (bytes, bytearray)):
-        return bytes(out)
+    if isinstance(out, bytes):
+        return out
     if isinstance(out, str):
-        return out.encode("latin1")
+        return out.encode("latin1", errors="replace")
     return bytes(out)
 
 
@@ -816,7 +814,6 @@ def generate_pdf_report(results, trade_df, single_results, settings_summary):
         ax.set_ylabel("收益率", fontproperties=font_prop)
         ax.tick_params(axis="x", rotation=30)
 
-        # 让坐标轴尽量也显示中文/负号正常
         for label in ax.get_xticklabels() + ax.get_yticklabels():
             label.set_fontproperties(font_prop)
 
@@ -852,7 +849,7 @@ st.title("🚀 RSI多资产组合回测 & 实时信号小工具")
 
 with st.sidebar:
     st.header("🔑 API 设置")
-    token = st.text_input("tushare Token", type="password", value="KARzfjPKTeKbJrXaadRKSVbuqOSIzGABasMpGVBOKTjjiRwRnAComWUJpshGDWMe")
+    token = st.text_input("tushare Token", type="password", value="hTASoWevdIQVKNJgEUGoDEWIMufHKYuLTSUGZfUOImwssjguKASNmWMywBkFgpjF")
     custom_url = st.text_input("自定义URL", value="http://124.222.60.121:8020/")
 
     st.header("📅 回测设置")
@@ -947,7 +944,6 @@ with tab1:
                     results = []
                     trade_df = pd.DataFrame()
 
-                    # 组合/多策略结果
                     if enable_multi:
                         st.info("多策略对比模式已开启 🚀")
                         strategy_params_list = [
@@ -991,7 +987,6 @@ with tab1:
                             "metrics": metrics
                         })
 
-                    # 默认总是做单标的回测
                     single_results = []
                     for code, df_asset in data_dict.items():
                         single_result_df, single_trade_df, single_metrics = backtest_single_asset(
@@ -1009,7 +1004,6 @@ with tab1:
 
                     st.success("回测完成！")
 
-                    # 多策略/组合净值对比
                     st.subheader("📈 策略净值对比")
                     fig = go.Figure()
 
@@ -1034,7 +1028,6 @@ with tab1:
 
                     st.plotly_chart(fig, use_container_width=True)
 
-                    # 多策略/组合绩效
                     st.subheader("📊 策略绩效对比")
                     metrics_table = []
 
@@ -1051,7 +1044,6 @@ with tab1:
 
                     st.dataframe(pd.DataFrame(metrics_table), use_container_width=True)
 
-                    # 单标的净值图
                     if single_results:
                         st.subheader("📈 单标的回测对比")
 
